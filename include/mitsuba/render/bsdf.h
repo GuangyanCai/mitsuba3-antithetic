@@ -85,6 +85,8 @@ enum class BSDFFlags : uint32_t {
     /// Does the implementation require access to texture-space differentials
     NeedsDifferentials   = 0x20000,
 
+    SupportsAntithetic    = 0x100000,
+
     // =============================================================
     //!                 Compound lobe attributes
     // =============================================================
@@ -313,6 +315,13 @@ public:
      */
     virtual std::pair<BSDFSample3f, Spectrum>
     sample(const BSDFContext &ctx,
+           const SurfaceInteraction3f &si,
+           Float sample1,
+           const Point2f &sample2,
+           Mask active = true) const = 0;
+
+    virtual std::tuple<BSDFSample3f, Spectrum, BSDFSample3f, Spectrum>
+    sample_antithetic(const BSDFContext &ctx,
            const SurfaceInteraction3f &si,
            Float sample1,
            const Point2f &sample2,
