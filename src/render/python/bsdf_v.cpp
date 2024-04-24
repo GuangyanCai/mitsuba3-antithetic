@@ -38,12 +38,16 @@ public:
         PYBIND11_OVERRIDE_PURE(Return, BSDF, sample, ctx, si, sample1, sample2, active);
     }
 
-    std::tuple<BSDFSample3f, Spectrum, BSDFSample3f, Spectrum>
+    std::pair<BSDFSample3f, Spectrum>
     sample_antithetic(const BSDFContext &ctx, const SurfaceInteraction3f &si,
            Float sample1, const Point2f &sample2,
            Mask active) const override {
-        using Return = std::tuple<BSDFSample3f, Spectrum, BSDFSample3f, Spectrum>;
-        PYBIND11_OVERRIDE_PURE(Return, BSDF, sample, ctx, si, sample1, sample2, active);
+        using Return = std::pair<BSDFSample3f, Spectrum>;
+        PYBIND11_OVERRIDE_PURE(Return, BSDF, sample_antithetic, ctx, si, sample1, sample2, active);
+    }
+
+    Vector3f get_antithetic_dir(const Vector3f &wi, const Vector3f &wo) const override {
+        PYBIND11_OVERRIDE_PURE(Vector3f, BSDF, get_antithetic_dir, wi, wo);
     }
 
     Spectrum eval(const BSDFContext &ctx,
@@ -119,7 +123,11 @@ template <typename Ptr, typename Cls> void bind_bsdf_generic(Cls &cls) {
                Float sample1, const Point2f &sample2, Mask active) {
                 return bsdf->sample_antithetic(ctx, si, sample1, sample2, active);
             }, "ctx"_a, "si"_a, "sample1"_a, "sample2"_a,
-            "active"_a = true, D(BSDF, sample_antithetic))
+            "active"_a = true)
+        .def("get_antithetic_dir",
+            [](Ptr bsdf, const Vector3f &wi, const Vector3f &wo) {
+                return bsdf->get_antithetic_dir(wi, wo);
+            }, "wi"_a, "wo"_a)
         .def("eval",
              [](Ptr bsdf, const BSDFContext &ctx, const SurfaceInteraction3f &si,
                 const Vector3f &wo,

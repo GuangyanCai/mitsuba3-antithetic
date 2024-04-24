@@ -320,13 +320,6 @@ public:
            const Point2f &sample2,
            Mask active = true) const = 0;
 
-    virtual std::tuple<BSDFSample3f, Spectrum, BSDFSample3f, Spectrum>
-    sample_antithetic(const BSDFContext &ctx,
-           const SurfaceInteraction3f &si,
-           Float sample1,
-           const Point2f &sample2,
-           Mask active = true) const = 0;
-
     /**
      * \brief Evaluate the BSDF f(wi, wo) or its adjoint version f^{*}(wi, wo)
      * and multiply by the cosine foreshortening term.
@@ -550,6 +543,26 @@ public:
                                      Mask active = true) const;
 
     // -----------------------------------------------------------------------
+    //! @{ \name Antithetic Sampling Related
+    // -----------------------------------------------------------------------
+
+    virtual std::pair<BSDFSample3f, Spectrum>
+    sample_antithetic(const BSDFContext &ctx,
+                      const SurfaceInteraction3f &si,
+                      Float sample1,
+                      const Point2f &sample2,
+                      Mask active = true) const = 0;
+
+    virtual Vector3f get_antithetic_dir(const Vector3f &wi,
+                                        const Vector3f &wo) const = 0;
+
+
+    /// Does the implementation support antithetic sampling?
+    bool supports_antithetic(Mask /*active*/ = true) const {
+        return has_flag(m_flags, BSDFFlags::SupportsAntithetic);
+    }
+
+    // -----------------------------------------------------------------------
     //! @{ \name BSDF property accessors (components, flags, etc)
     // -----------------------------------------------------------------------
 
@@ -674,6 +687,8 @@ DRJIT_VCALL_TEMPLATE_BEGIN(mitsuba::BSDF)
     DRJIT_VCALL_METHOD(eval_attribute)
     DRJIT_VCALL_METHOD(eval_attribute_1)
     DRJIT_VCALL_METHOD(eval_attribute_3)
+    DRJIT_VCALL_METHOD(sample_antithetic)
+    DRJIT_VCALL_METHOD(get_antithetic_dir)
     DRJIT_VCALL_GETTER(flags, uint32_t)
     auto needs_differentials() const {
         return has_flag(flags(), mitsuba::BSDFFlags::NeedsDifferentials);
