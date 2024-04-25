@@ -551,10 +551,14 @@ public:
                       const SurfaceInteraction3f &si,
                       Float sample1,
                       const Point2f &sample2,
-                      Mask active = true) const = 0;
+                      Mask active = true) const {
+        NotImplementedError("sample_antithetic");
+    }
 
     virtual Vector3f get_antithetic_dir(const Vector3f &wi,
-                                        const Vector3f &wo) const = 0;
+                                        const Vector3f &wo) const {
+        NotImplementedError("get_antithetic_dir");
+    }
 
 
     /// Does the implementation support antithetic sampling?
