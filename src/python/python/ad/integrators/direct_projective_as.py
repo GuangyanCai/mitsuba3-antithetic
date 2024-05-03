@@ -105,7 +105,8 @@ class DirectProjectiveASIntegrator(PSIntegrator):
         if self.project_seed not in ['both', 'bsdf', 'emitter']:
             raise Exception(f"Project seed must be one of 'both', 'bsdf', "
                             f"'emitter', got '{self.project_seed}'")
-
+        
+        self.use_antithetic = props.get('use_antithetic', False)
 
     def sample(self,
                mode: dr.ADMode,
@@ -183,59 +184,46 @@ class DirectProjectiveASIntegrator(PSIntegrator):
                 dr.disable_grad(ds_em.d)
 
             # Compute the detached MIS weight for the emitter sample
-            emitter_p2 = dr.sqr(ds_em.pdf)
-            bsdf_p2 = dr.sqr(bsdf_pdf)
-            mis_em = emitter_p2 / (emitter_p2 + bsdf_p2 * 2)
-            mis_em = dr.detach(dr.select(ds_em.delta, 1.0, mis_em))
+            mis_em = dr.select(ds_em.delta, 1.0, mis_weight(ds_em.pdf, bsdf_pdf))
 
             L[active_em] += bsdf_val * emitter_val * mis_em
 
         # ---------------------- BSDF sampling ----------------------
-        sample1 = sampler.next_1d(active_next)
-        sample2 = sampler.next_2d(active_next)
 
-        # Perform detached BSDF antithetic sampling
-        sample_bsdf_0, weight_bsdf_0 = bsdf.sample(bsdf_ctx, si, sample1, sample2, active_next)
-        sample_bsdf_1, weight_bsdf_1 = bsdf.sample_antithetic(bsdf_ctx, si, sample1, sample2, active_next)
+        # Perform detached BSDF sampling
+        bsdf_sample_method = bsdf.sample_antithetic if self.use_antithetic else bsdf.sample
+        sample_bsdf, weight_bsdf = bsdf_sample_method(bsdf_ctx, si, sampler.next_1d(active_next),
+                                               sampler.next_2d(active_next), active_next)
+        active_bsdf = active_next & dr.any(dr.neq(weight_bsdf, 0.0))
+        delta_bsdf = mi.has_flag(sample_bsdf.sampled_type, mi.BSDFFlags.Delta)
 
-        for sample_bsdf, weight_bsdf in zip([sample_bsdf_0, sample_bsdf_1], [weight_bsdf_0, weight_bsdf_1]):
-            active_bsdf = active_next & dr.any(dr.neq(weight_bsdf, 0.0))
-            delta_bsdf = mi.has_flag(sample_bsdf.sampled_type, mi.BSDFFlags.Delta)
+        # Construct the BSDF sampled ray
+        ray_bsdf = si.spawn_ray(si.to_world(sample_bsdf.wo))
 
-            # Construct the BSDF sampled ray
-            ray_bsdf = si.spawn_ray(si.to_world(sample_bsdf.wo))
+        with dr.resume_grad(when=not primal):
+            # Re-compute `weight_bsdf` with AD attached only in differentiable
+            # phase
+            if not primal:
+                wo = si.to_local(ray_bsdf.d)
+                bsdf_val, bsdf_pdf = bsdf.eval_pdf(bsdf_ctx, si, wo, active_bsdf)
+                weight_bsdf = bsdf_val / dr.detach(bsdf_pdf)
 
-            with dr.resume_grad(when=not primal):
-                # Re-compute `weight_bsdf` with AD attached only in differentiable
-                # phase
-                if not primal:
-                    wo = si.to_local(ray_bsdf.d)
-                    bsdf_val, bsdf_pdf = bsdf.eval_pdf(bsdf_ctx, si, wo, active_bsdf)
-                    weight_bsdf = bsdf_val / dr.detach(bsdf_pdf)
+                # ``ray_bsdf`` is left detached (both origin and direction)
 
-                    # ``ray_bsdf`` is left detached (both origin and direction)
+            # Trace the BSDF sampled ray
+            si_bsdf = scene.ray_intersect(
+                ray_bsdf, ray_flags=mi.RayFlags.All, coherent=False, active=active_bsdf)
 
-                # Trace the BSDF sampled ray
-                si_bsdf = scene.ray_intersect(
-                    ray_bsdf, ray_flags=mi.RayFlags.All, coherent=False, active=active_bsdf)
+            # Evaluate the emitter
+            L_bsdf = si_bsdf.emitter(scene, active_bsdf).eval(si_bsdf, active_bsdf)
 
-                # Evaluate the emitter
-                L_bsdf = si_bsdf.emitter(scene, active_bsdf).eval(si_bsdf, active_bsdf)
+            # Compute the detached MIS weight for the BSDF sample
+            ds_bsdf = mi.DirectionSample3f(scene, si=si_bsdf, ref=si)
+            pdf_emitter = scene.pdf_emitter_direction(
+                ref=si, ds=ds_bsdf, active=active_bsdf & ~delta_bsdf)
+            mis_bsdf = dr.select(delta_bsdf, 1.0, mis_weight(sample_bsdf.pdf, pdf_emitter))
 
-                # Compute the detached MIS weight for the BSDF sample
-                ds_bsdf = mi.DirectionSample3f(scene, si=si_bsdf, ref=si)
-                pdf_emitter = scene.pdf_emitter_direction(
-                    ref=si, ds=ds_bsdf, active=active_bsdf & ~delta_bsdf)
-                emitter_p2 = dr.sqr(pdf_emitter)
-                
-                bsdf_p2 = dr.sqr(sample_bsdf.pdf)
-                mis_bsdf = bsdf_p2 / (emitter_p2 + bsdf_p2 * 2) 
-                mis_bsdf = dr.detach(dr.select(delta_bsdf, 1.0, mis_bsdf))
-
-                L[active_bsdf] += L_bsdf * weight_bsdf * mis_bsdf
-                # L[active_bsdf] += L_bsdf * weight_bsdf * dr.detach(sample_bsdf.pdf) / (sample_bsdf_0.pdf + sample_bsdf_1.pdf)
-
-
+            L[active_bsdf] += L_bsdf * weight_bsdf * mis_bsdf
 
         # ---------------------- Seed rays for projection ----------------------
 
