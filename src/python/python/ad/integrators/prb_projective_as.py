@@ -127,6 +127,7 @@ class PathProjectiveASIntegrator(PSIntegrator):
                             f"'emitter', got '{self.project_seed}'")
         
         self.use_antithetic = props.get('use_antithetic', False)
+        self.min_roughness = props.get('min_roughness', 0)
 
     def sample(self,
                mode: dr.ADMode,
@@ -202,6 +203,8 @@ class PathProjectiveASIntegrator(PSIntegrator):
 
             # Get the BSDF, potentially computes texture-space differentials
             bsdf = si.bsdf(ray)
+            first_bounce = dr.eq(depth, depth_init)
+            min_roughness = dr.select(first_bounce, 0, self.min_roughness)
 
             # ---------------------- Direct emission ----------------------
 
@@ -244,24 +247,28 @@ class PathProjectiveASIntegrator(PSIntegrator):
 
                 # Evaluate BSDF * cos(theta) differentiably
                 wo = si.to_local(ds.d)
-                bsdf_value_em, bsdf_pdf_em = bsdf.eval_pdf(bsdf_ctx, si, wo, active_em)
+                bsdf_value_em = bsdf.eval_roughen(bsdf_ctx, si, wo, active_em, min_roughness)
+                bsdf_pdf_em = bsdf.pdf_roughen(bsdf_ctx, si, wo, active_em, min_roughness)
+
                 mis_em = dr.select(ds.delta, 1, mis_weight(ds.pdf, bsdf_pdf_em))
                 Lr_dir = β * mis_em * bsdf_value_em * em_weight
 
             # ------------------ Detached BSDF sampling -------------------
+            antithetic = self.use_antithetic & first_bounce
             sample1, sample2 = sampler.next_1d(), sampler.next_2d()
-            bsdf_sample, bsdf_weight = bsdf.sample(bsdf_ctx, si,
+            bsdf_sample, bsdf_weight = bsdf.sample_roughen(bsdf_ctx, si,
                                                    sample1,
                                                    sample2,
-                                                   active_next)
+                                                   active_next & ~antithetic, 
+                                                   min_roughness)
             
             bsdf_sample_anti, bsdf_weight_anti = bsdf.sample_antithetic(bsdf_ctx, si,
                                                    sample1,
                                                    sample2,
-                                                   active_next)
-            mask = self.use_antithetic & dr.eq(depth, depth_init)
-            bsdf_sample = dr.select(mask, bsdf_sample_anti, bsdf_sample)
-            bsdf_weight = dr.select(mask, bsdf_weight_anti, bsdf_weight)
+                                                   active_next & antithetic)
+            
+            bsdf_sample = dr.select(antithetic, bsdf_sample_anti, bsdf_sample)
+            bsdf_weight = dr.select(antithetic, bsdf_weight_anti, bsdf_weight)
 
             # ---- Update loop variables based on current interaction -----
 
@@ -351,7 +358,7 @@ class PathProjectiveASIntegrator(PSIntegrator):
                     wo = si.to_local(ray.d)
 
                     # Re-evaluate BSDF * cos(theta) differentiably
-                    bsdf_val = bsdf.eval(bsdf_ctx, si, wo, active_next)
+                    bsdf_val = bsdf.eval_roughen(bsdf_ctx, si, wo, active_next, min_roughness)
 
                     # Detached version of the above term and inverse
                     bsdf_val_det = bsdf_weight * bsdf_sample.pdf

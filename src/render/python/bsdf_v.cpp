@@ -38,18 +38,6 @@ public:
         PYBIND11_OVERRIDE_PURE(Return, BSDF, sample, ctx, si, sample1, sample2, active);
     }
 
-    std::pair<BSDFSample3f, Spectrum>
-    sample_antithetic(const BSDFContext &ctx, const SurfaceInteraction3f &si,
-           Float sample1, const Point2f &sample2,
-           Mask active) const override {
-        using Return = std::pair<BSDFSample3f, Spectrum>;
-        PYBIND11_OVERRIDE_PURE(Return, BSDF, sample_antithetic, ctx, si, sample1, sample2, active);
-    }
-
-    Vector3f get_antithetic_dir(const Vector3f &wi, const Vector3f &wo) const override {
-        PYBIND11_OVERRIDE_PURE(Vector3f, BSDF, get_antithetic_dir, wi, wo);
-    }
-
     Spectrum eval(const BSDFContext &ctx,
                   const SurfaceInteraction3f &si,
                   const Vector3f &wo,
@@ -105,6 +93,45 @@ public:
         PYBIND11_OVERRIDE(void, BSDF, parameters_changed, keys);
     }
 
+    std::pair<BSDFSample3f, Spectrum>
+    sample_antithetic(const BSDFContext &ctx, const SurfaceInteraction3f &si,
+           Float sample1, const Point2f &sample2,
+           Mask active) const override {
+        using Return = std::pair<BSDFSample3f, Spectrum>;
+        PYBIND11_OVERRIDE_PURE(Return, BSDF, sample_antithetic, ctx, si, sample1, sample2, active);
+    }
+
+    Vector3f get_antithetic_dir(const Vector3f &wi, const Vector3f &wo) const override {
+        PYBIND11_OVERRIDE_PURE(Vector3f, BSDF, get_antithetic_dir, wi, wo);
+    }
+
+    std::pair<BSDFSample3f, Spectrum>
+    sample_roughen(const BSDFContext &ctx,
+           const SurfaceInteraction3f &si,
+           Float sample1,
+           const Point2f &sample2,
+           Mask active,
+           Float min_roughness) const override {
+        using Return = std::pair<BSDFSample3f, Spectrum>;
+        PYBIND11_OVERRIDE_PURE(Return, BSDF, sample_roughen, ctx, si, sample1, sample2, active, min_roughness);
+    }
+
+    Spectrum eval_roughen(const BSDFContext &ctx,
+                  const SurfaceInteraction3f &si,
+                  const Vector3f &wo,
+                  Mask active,
+                  Float min_roughness) const override {
+        PYBIND11_OVERRIDE_PURE(Spectrum, BSDF, eval_roughen, ctx, si, wo, active, min_roughness);
+    }
+
+    Float pdf_roughen(const BSDFContext &ctx,
+              const SurfaceInteraction3f &si,
+              const Vector3f &wo,
+              Mask active,
+              Float min_roughness) const override {
+        PYBIND11_OVERRIDE_PURE(Float, BSDF, pdf_roughen, ctx, si, wo, active, min_roughness);
+    }
+
     using BSDF::m_flags;
     using BSDF::m_components;
 };
@@ -118,16 +145,6 @@ template <typename Ptr, typename Cls> void bind_bsdf_generic(Cls &cls) {
                 return bsdf->sample(ctx, si, sample1, sample2, active);
             }, "ctx"_a, "si"_a, "sample1"_a, "sample2"_a,
             "active"_a = true, D(BSDF, sample))
-        .def("sample_antithetic",
-            [](Ptr bsdf, const BSDFContext &ctx, const SurfaceInteraction3f &si,
-               Float sample1, const Point2f &sample2, Mask active) {
-                return bsdf->sample_antithetic(ctx, si, sample1, sample2, active);
-            }, "ctx"_a, "si"_a, "sample1"_a, "sample2"_a,
-            "active"_a = true)
-        .def("get_antithetic_dir",
-            [](Ptr bsdf, const Vector3f &wi, const Vector3f &wo) {
-                return bsdf->get_antithetic_dir(wi, wo);
-            }, "wi"_a, "wo"_a)
         .def("eval",
              [](Ptr bsdf, const BSDFContext &ctx, const SurfaceInteraction3f &si,
                 const Vector3f &wo,
@@ -184,7 +201,33 @@ template <typename Ptr, typename Cls> void bind_bsdf_generic(Cls &cls) {
         .def("flags", [](Ptr bsdf) { return bsdf->flags(); }, D(BSDF, flags))
         .def("needs_differentials",
              [](Ptr bsdf) { return bsdf->needs_differentials(); },
-             D(BSDF, needs_differentials));
+             D(BSDF, needs_differentials))
+        .def("sample_antithetic",
+            [](Ptr bsdf, const BSDFContext &ctx, const SurfaceInteraction3f &si,
+               Float sample1, const Point2f &sample2, Mask active) {
+                return bsdf->sample_antithetic(ctx, si, sample1, sample2, active);
+            }, "ctx"_a, "si"_a, "sample1"_a, "sample2"_a,
+            "active"_a = true)
+        .def("get_antithetic_dir",
+            [](Ptr bsdf, const Vector3f &wi, const Vector3f &wo) {
+                return bsdf->get_antithetic_dir(wi, wo);
+            }, "wi"_a, "wo"_a)
+        .def("sample_roughen",
+            [](Ptr bsdf, const BSDFContext &ctx, const SurfaceInteraction3f &si,
+               Float sample1, const Point2f &sample2, Mask active, Float min_roughness) {
+                return bsdf->sample_roughen(ctx, si, sample1, sample2, active, min_roughness);
+            }, "ctx"_a, "si"_a, "sample1"_a, "sample2"_a,
+            "active"_a = true, "min_roughness"_a = 0)
+        .def("eval_roughen",
+             [](Ptr bsdf, const BSDFContext &ctx, const SurfaceInteraction3f &si,
+                const Vector3f &wo, Mask active, Float min_roughness) { 
+                return bsdf->eval_roughen(ctx, si, wo, active, min_roughness);
+             }, "ctx"_a, "si"_a, "wo"_a, "active"_a = true, "min_roughness"_a = 0)
+        .def("pdf_roughen",
+             [](Ptr bsdf, const BSDFContext &ctx, const SurfaceInteraction3f &si,
+                const Vector3f &wo, Mask active, Float min_roughness) { 
+                return bsdf->pdf_roughen(ctx, si, wo, active, min_roughness);
+             }, "ctx"_a, "si"_a, "wo"_a, "active"_a = true, "min_roughness"_a = 0);
 
     if constexpr (dr::is_array_v<Ptr>)
         bind_drjit_ptr_array(cls);

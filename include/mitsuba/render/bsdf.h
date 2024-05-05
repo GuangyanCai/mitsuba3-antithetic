@@ -560,11 +560,40 @@ public:
         NotImplementedError("get_antithetic_dir");
     }
 
+    // -----------------------------------------------------------------------
+    //! @{ \name Routhening Related
+    // -----------------------------------------------------------------------
 
     /// Does the implementation support antithetic sampling?
     bool supports_antithetic(Mask /*active*/ = true) const {
         return has_flag(m_flags, BSDFFlags::SupportsAntithetic);
     }
+
+    virtual std::pair<BSDFSample3f, Spectrum>
+    sample_roughen(const BSDFContext &ctx,
+           const SurfaceInteraction3f &si,
+           Float sample1,
+           const Point2f &sample2,
+           Mask active = true,
+           Float min_roughness = 0) const {
+        NotImplementedError("sample_roughen");
+    }
+
+    virtual Spectrum eval_roughen(const BSDFContext &ctx,
+                          const SurfaceInteraction3f &si,
+                          const Vector3f &wo,
+                          Mask active = true,
+                          Float min_roughness = 0) const {
+        NotImplementedError("eval_roughen");
+    }
+
+    virtual Float pdf_roughen(const BSDFContext &ctx,
+                      const SurfaceInteraction3f &si,
+                      const Vector3f &wo,
+                      Mask active = true,
+                      Float min_roughness = 0) const {
+        NotImplementedError("pdf_roughen");                    
+    };
 
     // -----------------------------------------------------------------------
     //! @{ \name BSDF property accessors (components, flags, etc)
@@ -693,6 +722,9 @@ DRJIT_VCALL_TEMPLATE_BEGIN(mitsuba::BSDF)
     DRJIT_VCALL_METHOD(eval_attribute_3)
     DRJIT_VCALL_METHOD(sample_antithetic)
     DRJIT_VCALL_METHOD(get_antithetic_dir)
+    DRJIT_VCALL_METHOD(sample_roughen)
+    DRJIT_VCALL_METHOD(eval_roughen)
+    DRJIT_VCALL_METHOD(pdf_roughen)
     DRJIT_VCALL_GETTER(flags, uint32_t)
     auto needs_differentials() const {
         return has_flag(flags(), mitsuba::BSDFFlags::NeedsDifferentials);
