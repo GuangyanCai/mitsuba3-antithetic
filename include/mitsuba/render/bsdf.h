@@ -552,7 +552,7 @@ public:
                       Float sample1,
                       const Point2f &sample2,
                       Mask active = true) const {
-        NotImplementedError("sample_antithetic");
+        return sample(ctx, si, sample1, sample2, active);
     }
 
     virtual Vector3f get_antithetic_dir(const Vector3f &wi,
@@ -576,7 +576,7 @@ public:
            const Point2f &sample2,
            Mask active = true,
            Float min_roughness = 0) const {
-        NotImplementedError("sample_roughen");
+        return sample(ctx, si, sample1, sample2, active);
     }
 
     virtual Spectrum eval_roughen(const BSDFContext &ctx,
@@ -584,7 +584,7 @@ public:
                           const Vector3f &wo,
                           Mask active = true,
                           Float min_roughness = 0) const {
-        NotImplementedError("eval_roughen");
+        return eval(ctx, si, wo, active);
     }
 
     virtual Float pdf_roughen(const BSDFContext &ctx,
@@ -592,7 +592,7 @@ public:
                       const Vector3f &wo,
                       Mask active = true,
                       Float min_roughness = 0) const {
-        NotImplementedError("pdf_roughen");                    
+        return pdf(ctx, si, wo, active);                 
     };
 
     // -----------------------------------------------------------------------
